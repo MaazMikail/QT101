@@ -1,1 +1,3 @@
-#QT101: Introductory Lectures in Quantitative Trading
+QT101: 
+
+Introductory Lectures in Quantitative Trading
