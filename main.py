@@ -5,6 +5,7 @@ import yfinance
 import pytz
 import datetime
 import threading
+from utils import save_pickle, load_pickle
 
 
 def get_tickers():
@@ -16,15 +17,21 @@ def get_tickers():
     return tickers
 
 
-def get_ticker_data(ticker, start, end, granularity='1d'):
-    df = yfinance.Ticker(ticker).history(
+def get_ticker_data(ticker, start, end, granularity='1d', tries=0):
 
-        start=start,
-        end=end,
-        interval=granularity,
-        auto_adjust=True
+    try:
+        df = yfinance.Ticker(ticker).history(
 
-    ).reset_index()
+            start=start,
+            end=end,
+            interval=granularity,
+            auto_adjust=True
+
+        ).reset_index()
+    except Exception as err:
+        if tries < 5:
+            return get_ticker_data(ticker, start, end, granularity, tries+1)
+        return pd.DataFrame()
 
     df = df.rename(columns={
 
@@ -42,24 +49,41 @@ def get_ticker_data(ticker, start, end, granularity='1d'):
     df['datetime'] = df['datetime'].dt.tz_convert('UTC')
     df = df.drop(columns=['Dividends', 'Stock Splits'])
     df = df.set_index('datetime', drop=True)
-    input(df)
+    
+    return df
 
 
 def get_tickers_data(tickers, starts, ends, granularity='1d'):
     dfs = [None] * len(tickers)
     def _get_hist(i):
+        print(tickers[i])
         df = get_ticker_data(tickers[i], starts[i], ends[i], granularity)
         dfs[i] = df
     
-    for i in range(len(tickers)):
-        _get_hist(i)
-    
-    return dfs
+    threads = [threading.Thread(target=_get_hist, args=(i,)) for i in range(len(tickers))]
+    [thread.start() for thread in threads]
+    [thread.join() for thread in threads]
+    tickers = [tickers[i] for i in range(len(tickers)) if not dfs[i].empty]
+    dfs = [df for df in dfs if not df.empty]
 
+    return tickers, dfs
 
-tickers = get_tickers()
+def get_ticker_dfs(start, end):
+    try:
+        tickers, ticker_dfs = load_pickle("dataset.obj")
+    except Exception as err:    
+        tickers = get_tickers()
+        starts = [start]*len(tickers)
+        ends = [end]*len(tickers)
+        tickers, dfs = get_tickers_data(tickers, starts, ends, granularity="1d")
+        ticker_dfs = {ticker:df for ticker,df in zip(tickers, dfs)}
+        save_pickle("dataset.obj", (tickers, ticker_dfs))
+
+    return tickers, ticker_dfs
 
 start_date = datetime.datetime(2010,1,1, tzinfo=pytz.utc)
-end_date = datetime.datetime(2020,1,1, tzinfo=pytz.utc)
+end_date = datetime.datetime.now(pytz.utc)
 
-dfs = get_tickers_data(tickers[:5], [start_date]*5, [end_date]*5)
+dfs = get_ticker_dfs(start_date, end_date)
+print(len(dfs))
+
