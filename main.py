@@ -45,9 +45,21 @@ def get_ticker_data(ticker, start, end, granularity='1d'):
     input(df)
 
 
+def get_tickers_data(tickers, starts, ends, granularity='1d'):
+    dfs = [None] * len(tickers)
+    def _get_hist(i):
+        df = get_ticker_data(tickers[i], starts[i], ends[i], granularity)
+        dfs[i] = df
+    
+    for i in range(len(tickers)):
+        _get_hist(i)
+    
+    return dfs
+
 
 tickers = get_tickers()
 
 start_date = datetime.datetime(2010,1,1, tzinfo=pytz.utc)
 end_date = datetime.datetime(2020,1,1, tzinfo=pytz.utc)
-print(get_ticker_data(tickers[0], start_date, end_date))
+
+dfs = get_tickers_data(tickers[:5], [start_date]*5, [end_date]*5)
